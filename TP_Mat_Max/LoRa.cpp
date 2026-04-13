@@ -59,9 +59,10 @@ void configurerLoRa() {
 void joinOTAA() {
   Serial.println("Tentative de join OTAA...");
   envoyerAT("AT+JOIN=1:0:10:8", 500);
+  delay(2000);
 
   unsigned long debut = millis();
-  while (millis() - debut < 60000) {
+  while (millis() - debut < 180000) {
     if (Serial2.available()) {
       String rep = Serial2.readStringUntil('\n');
       rep.trim();
@@ -83,6 +84,11 @@ void joinOTAA() {
   }
 
   Serial.println("⏱️ Timeout");
+  delay(1000);
+  String statusCheck = envoyerAT("AT+NJS=?", 1000);
+  if (statusCheck.indexOf("1") >= 0) {
+    loraJoined = true;
+  }
 }
 
 void sendLoRaMessage(int port, String hexPayload) {

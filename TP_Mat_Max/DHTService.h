@@ -1,7 +1,9 @@
 #ifndef DHTSERVICE_H
 #define DHTSERVICE_H
 
+#include <Arduino.h>
+
 void initDHT();
-void manageDHT();
+String manageDHT();
 
 #endif

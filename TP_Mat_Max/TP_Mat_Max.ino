@@ -1,4 +1,7 @@
 #include "dhtservice.h"
+#include "ldrservice.h"
+#include "keypadservice.h"
+#include "helper.h"
 #include "lora.h"
 #include "button.h"
 
@@ -16,23 +19,42 @@ void setup() {
   delay(2000);
 
   initDHT();
+  initLDR();
+  initKeypad();
   Serial.println("Appuyez sur le bouton pour envoyer les données...");
 }
 
 void loop() {
+  // Gestion des événements du keypad
+  char key = keypad.getKey();
+  if (key) {
+    Serial.print("Touche pressée: ");
+    Serial.println(key);
+
+    // Ajouter la touche aux 4 derniers inputs
+    CS16MC += key;
+
+    // Garder seulement les 4 derniers caractères
+    if (CS16MC.length() > 4) {
+      CS16MC = CS16MC.substring(CS16MC.length() - 4);
+    }
+
+    Serial.print("CS16MC: ");
+    Serial.println(CS16MC);
+  }
+
   // Vérifier si le bouton est appuyé
   if (ValidateButton()) {
     Serial.println("\n📤 Bouton appuyé - Envoi des données...");
-    manageDHT();
-  }
+    String DHTPayload = manageDHT();
+    String LDRPayload = manageLDR();
+    String KeypadPayload = manageKeypad();
 
-  // --- PARTIE PONT SÉRIE ---
-  // while (Serial.available()) {
-  //   Serial2.write(Serial.read());
-  // }
-  // while (Serial2.available()) {
-  //   Serial.write(Serial2.read());
-  // }
+    String payload = mergePayloads(DHTPayload, LDRPayload, KeypadPayload);
+    Serial.println(payload);
+    sendLoRaMessage(2, payload);
+
+  }
   
-  delay(10);  // Petit délai pour éviter de surcharger
+  delay(10); 
 }

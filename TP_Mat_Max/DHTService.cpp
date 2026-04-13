@@ -14,7 +14,7 @@ void initDHT(){
   Serial.println("🚀 Prêt ! Envois DHT");
 }
 
-void manageDHT(){
+String manageDHT(){
 
     // Lecture du capteur
     float h = dht.readHumidity();
@@ -23,16 +23,17 @@ void manageDHT(){
     // Vérification que la lecture a fonctionné
     if (isnan(h) || isnan(t)) {
       Serial.println("Erreur de lecture du DHT11 !");
-    } else {
-      Serial.print("Temp: ");
-      Serial.print(t);
-      Serial.print("°C, ");
-      Serial.print("Hum: ");
-      Serial.print(h);
-      Serial.println("%");
-
-      // Encoder et envoyer
-      String payload = encodePayload(t, h);
-      sendLoRaMessage(2, payload);
+      return String("");
     }
+
+    Serial.print("Temp: ");
+    Serial.print(t);
+    Serial.print("°C, ");
+    Serial.print("Hum: ");
+    Serial.print(h);
+    Serial.println("%");
+
+    // Encoder et renvoyer
+    String payload = encodeDHTPayload(t, h);
+    return payload;
 }
