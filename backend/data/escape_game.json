@@ -1,0 +1,28 @@
+{
+  "games": [
+    {
+      "id": 1,
+      "teamName": "Test Team",
+      "step": 1,
+      "remainingSeconds": 0,
+      "isFinished": false,
+      "finishedAt": null,
+      "durationSeconds": null,
+      "createdAt": "2026-04-14T09:00:18.079Z",
+      "updatedAt": "2026-04-14T09:00:18.079Z"
+    }
+  ],
+  "sensorPayloads": [
+    {
+      "id": 1,
+      "device": "mat-max",
+      "temperature": 23.5,
+      "humidity": 39,
+      "luminosity": 174,
+      "keypad": "5638",
+      "receivedAt": "2026-04-14T09:00:23.498Z"
+    }
+  ],
+  "nextGameId": 2,
+  "nextPayloadId": 2
+}
