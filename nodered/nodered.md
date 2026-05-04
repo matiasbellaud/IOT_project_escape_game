@@ -42,13 +42,13 @@ Ajoute aussi :
 
 Crée deux branches :
 
-#### ✅ **Branche 1 : Température ≤ 35°C** (données normales)
+#### **Branche 1 : Température ≤ 35°C** (données normales)
 1. Formate les données pour InfluxDB
 2. Envoie vers **InfluxDB** (bucket: `iot_data`, measurement: `capteurs`)
 3. Envoie vers **API Backend** (`http://10.44.20.4:3001/api/iot/uplink`)
 4. Affiche les logs de débogage
 
-#### 🚨 **Branche 2 : Température > 35°C** (alerte)
+#### **Branche 2 : Température > 35°C** (alerte)
 1. Formate les données d'alerte
 2. Envoie vers **Google Script** (webhook)
 3. Déclenche une alerte externalisée
