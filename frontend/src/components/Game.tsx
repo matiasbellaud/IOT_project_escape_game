@@ -191,17 +191,35 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
       addLog(`État initial reçu : étape ${data.currentStep}`);
     });
 
-    socket.on("iot_update", (data: { currentStep: number; stepSolved: boolean; payload: any }) => {
-      setCurrentStep(data.currentStep ?? 1);
-      setIotEvent(data.stepSolved ? "Étape résolue côté back-end" : "Mesure reçue côté back-end");
-      addLog(`Mise à jour IoT reçue : étape ${data.currentStep}`);
-      if (data.stepSolved && data.currentStep === 2) {
-        setStep1Done(true);
-      }
-      if (data.stepSolved && data.currentStep === 3) {
-        setStep2Done(true);
-      }
-    });
+    socket.on(
+      "iot_update",
+      (data: { currentStep: number; stepSolved: boolean; payload: any; isCompleted?: boolean }) => {
+        const payload = data.payload;
+        if (payload) {
+          if (typeof payload.temperature === "number") setTemp(payload.temperature);
+          if (typeof payload.humidity === "number") setHum(payload.humidity);
+          if (typeof payload.luminosity === "number") setLux(payload.luminosity);
+        }
+
+        setCurrentStep(data.currentStep ?? 1);
+        setIotEvent(data.stepSolved ? "Étape résolue côté back-end" : "Mesure reçue côté back-end");
+        addLog(`Mise à jour IoT reçue : étape ${data.currentStep}`);
+        if (data.stepSolved && data.currentStep === 2) {
+          setStep1Done(true);
+        }
+        if (data.stepSolved && data.currentStep === 3) {
+          if (data.isCompleted) {
+            setStep3Done(true);
+            setShowFinal(true);
+          } else {
+            setStep2Done(true);
+          }
+        }
+        if (data.isCompleted) {
+          setShowFinal(true);
+        }
+      },
+    );
 
     return () => {
       socket.disconnect();
@@ -241,7 +259,7 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
     <div id="game" className="page active" style={{ padding: 0 }}>
       <nav>
         <div className="nav-logo">
-          CIPHER<span>ROOM</span>
+          MATMAX<span>SCAPE</span>
         </div>
         <div className="nav-right">
           <span style={{ color: "var(--accent2)" }}>
@@ -264,10 +282,6 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
         <div>
           <div className="mission-id">MISSION // CR-2026-0342</div>
           <div className="mission-title">LA CHAMBRE FROIDE</div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div className="timer-label">TEMPS RESTANT</div>
-          <div className="timer-display">{formatTime(timerSeconds)}</div>
         </div>
       </div>
 
@@ -344,10 +358,6 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
             <div className="enigma active">
               <div className="enigma-tag">// ÉNIGME 01 — CAPTEUR DHT11</div>
               <div className="enigma-title">LE SOUFFLE DU SPHINX</div>
-              <div className="enigma-desc">
-                Soufflez sur le capteur DHT11 pour réchauffer l'air autour de lui,
-                puis envoyez la mesure.
-              </div>
 
               <div className="sensor-display">
                 <div className="panel sensor-card">
@@ -377,23 +387,7 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
               </div>
 
               <div className="enigma-riddle">
-                <strong>« Je ne s'ouvre qu'à la chaleur du vivant.</strong>
-                Fais monter la température au-delà du seuil des 30 degrés.
-              </div>
-
-              <button className="btn btn-orange" onClick={handleSendTemp}>
-                SIMULER UN SOUFFLE & ENVOYER LA MESURE
-              </button>
-
-              <div
-                style={{
-                  fontFamily: '"Share Tech Mono", monospace',
-                  fontSize: "12px",
-                  color: "var(--text-dim)",
-                  marginTop: "10px",
-                }}
-              >
-                Cliquez plusieurs fois pour faire monter la température.
+                <strong>« Je ne m'ouvre qu'à la chaleur du vivant.</strong>
               </div>
 
               <div
@@ -432,9 +426,6 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
             <div className="enigma active">
               <div className="enigma-tag">// ÉNIGME 02 — CAPTEUR LDR</div>
               <div className="enigma-title">L'ŒIL DE LA NUIT</div>
-              <div className="enigma-desc">
-                Couvrez le capteur LDR avec votre main ou un objet, puis envoyez la mesure.
-              </div>
 
               <div className="sensor-display">
                 <div className="panel sensor-card">
@@ -453,22 +444,6 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
 
               <div className="enigma-riddle">
                 <strong>« Je suis aveugle quand la lumière est trop forte.</strong>
-                Cache-moi dans l'obscurité totale et je t'ouvrirai le passage.
-              </div>
-
-              <button className="btn btn-orange" onClick={handleSendLight}>
-                SIMULER L'OBSCURITÉ & ENVOYER LA MESURE
-              </button>
-
-              <div
-                style={{
-                  fontFamily: '"Share Tech Mono", monospace',
-                  fontSize: "12px",
-                  color: "var(--text-dim)",
-                  marginTop: "10px",
-                }}
-              >
-                Chaque clic diminue la luminosité jusqu'à l'obscurité.
               </div>
 
               {step2Done && (
@@ -497,9 +472,6 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
             <div className="enigma active">
               <div className="enigma-tag">// ÉNIGME 03 — CODE SECRET</div>
               <div className="enigma-title">LE COFFRE-FORT DU CRYPTOGRAPHE</div>
-              <div className="enigma-desc">
-                Quatre indices sont gravés dans le métal. Le code est 4-3-2-7.
-              </div>
 
               <div className="enigma-riddle">
                 <strong>1.</strong> Le premier chiffre est le double du troisième.
@@ -522,32 +494,6 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
                       {code[i] || "_"}
                     </div>
                   ))}
-                </div>
-              </div>
-
-              <div className="numpad">
-                {["7", "8", "9", "4", "5", "6", "1", "2", "3"].map((num) => (
-                  <div
-                    key={num}
-                    className="numpad-btn"
-                    onClick={() => typeDigit(num)}
-                  >
-                    {num}
-                  </div>
-                ))}
-                <div
-                  className="numpad-btn"
-                  style={{ gridColumn: 2 }}
-                  onClick={() => typeDigit("0")}
-                >
-                  0
-                </div>
-                <div
-                  className="numpad-btn"
-                  style={{ color: "var(--danger)" }}
-                  onClick={deleteDigit}
-                >
-                  ⌫
                 </div>
               </div>
 
@@ -583,75 +529,6 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
 
         {/* SIDEBAR D'INFORMATIONS */}
         <div className="game-sidebar">
-          <div className="panel sidebar-panel">
-            <div className="panel-corner tl"></div>
-            <div className="panel-corner tr"></div>
-            <div className="panel-corner bl"></div>
-            <div className="panel-corner br"></div>
-            <div className="sidebar-title">INDICES DISPONIBLES</div>
-            <div className="hint-item">
-              <span className="hint-num">[01]</span>
-              <span>
-                Le capteur DHT11 ne peut pas mesurer en dessous de 0°C.
-              </span>
-            </div>
-            <div className="hint-item">
-              <span className="hint-num">[02]</span>
-              <span>
-                L'année de fondation du bâtiment est gravée sur la plaque
-                d'entrée.
-              </span>
-            </div>
-            <div
-              className="hint-locked"
-              onClick={() => {
-                setPenalties((p) => p + 10);
-                alert(
-                  "Indice : La solution est toujours plus simple qu'elle n'y paraît...",
-                );
-                addLog("Indice utilisé (-10 pts)");
-              }}
-            >
-              🔒 DÉBLOQUER INDICE <span className="hint-cost">(−10 pts)</span>
-            </div>
-          </div>
-
-          <div className="panel sidebar-panel">
-            <div className="panel-corner tl"></div>
-            <div className="panel-corner tr"></div>
-            <div className="panel-corner bl"></div>
-            <div className="panel-corner br"></div>
-            <div className="sidebar-title">SCORE EN COURS</div>
-            <div className="score-row">
-              <span className="score-label">Points de base</span>
-              <span className="score-value">1000</span>
-            </div>
-            <div className="score-row">
-              <span className="score-label">Bonus rapidité</span>
-              <span className="score-value">+{speedBonus}</span>
-            </div>
-            <div className="score-row">
-              <span className="score-label">Pénalités</span>
-              <span className="score-value" style={{ color: "var(--danger)" }}>
-                −{penalties}
-              </span>
-            </div>
-            <div
-              className="score-row"
-              style={{ border: "none", marginTop: "4px" }}
-            >
-              <span className="score-label" style={{ color: "var(--text)" }}>
-                TOTAL
-              </span>
-              <span
-                className="score-value"
-                style={{ fontSize: "18px", color: "var(--success)" }}
-              >
-                {totalScore}
-              </span>
-            </div>
-          </div>
-
           <div className="panel sidebar-panel">
             <div className="panel-corner tl"></div>
             <div className="panel-corner tr"></div>

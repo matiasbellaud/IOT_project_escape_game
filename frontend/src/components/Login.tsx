@@ -27,7 +27,7 @@ const Login: React.FC<LoginProps> = ({ onNavigate }) => {
       <div className="login-wrapper">
         <div className="login-header">
           <div className="login-logo">
-            CIPHER<span>ROOM</span>
+            MATMAX<span>SCAPE</span>
           </div>
           <div className="login-sub">// SYSTÈME D'ACCÈS SÉCURISÉ //</div>
           <div className="decor-line"></div>

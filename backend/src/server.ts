@@ -20,8 +20,8 @@ const io = new SocketIOServer(server, {
   cors: { origin: "*" },
 });
 
-const TEMPERATURE_THRESHOLD = 30;
-const LIGHT_THRESHOLD = 50;
+const TEMPERATURE_THRESHOLD = 27;
+const LIGHT_THRESHOLD = 800;
 const SECRET_CODE = "4327";
 
 // Middlewares
@@ -145,6 +145,12 @@ app.post("/api/iot/uplink", async (req: Request, res: Response) => {
   try {
     const payload = req.body;
     const { device, temperature, humidity, luminosity, keypad } = payload ?? {};
+    const keypadValue =
+      typeof keypad === "number"
+        ? String(keypad)
+        : typeof keypad === "string"
+        ? keypad
+        : "";
 
     if (
       !device ||
@@ -152,7 +158,7 @@ app.post("/api/iot/uplink", async (req: Request, res: Response) => {
       typeof temperature !== "number" ||
       typeof humidity !== "number" ||
       typeof luminosity !== "number" ||
-      typeof keypad !== "string"
+      !keypadValue
     ) {
       return res.status(400).json({
         success: false,
@@ -162,7 +168,7 @@ app.post("/api/iot/uplink", async (req: Request, res: Response) => {
 
     const unfinishedGames = await listUnfinishedGames();
     const currentGame = unfinishedGames.length > 0 ? unfinishedGames[0] : null;
-    const gamePayload = currentGame ? { ...payload, gameId: currentGame.id } : payload;
+    const gamePayload = currentGame ? { ...payload, keypad: keypadValue, gameId: currentGame.id } : { ...payload, keypad: keypadValue };
 
     const sensorRecord: {
       gameId?: number;
@@ -176,7 +182,7 @@ app.post("/api/iot/uplink", async (req: Request, res: Response) => {
       temperature,
       humidity,
       luminosity,
-      keypad,
+      keypad: keypadValue,
     };
 
     if (currentGame?.id !== undefined) {
@@ -184,6 +190,8 @@ app.post("/api/iot/uplink", async (req: Request, res: Response) => {
     }
 
     await addSensorPayload(sensorRecord);
+
+    console.log("Nouveau payload IoT reçu:", gamePayload);
 
     let stepSolved = false;
     let nextStep = currentGame?.step ?? 1;
@@ -198,7 +206,7 @@ app.post("/api/iot/uplink", async (req: Request, res: Response) => {
         nextStep = 3;
         stepSolved = true;
         await updateGame(currentGame.id, { step: 3 });
-      } else if (currentGame.step === 3 && keypad === SECRET_CODE) {
+      } else if (currentGame.step === 3 && keypadValue.trim() === SECRET_CODE) {
         stepSolved = true;
         isCompleted = true;
         await completeGame(currentGame.id);

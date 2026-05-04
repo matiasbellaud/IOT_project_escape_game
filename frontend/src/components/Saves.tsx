@@ -52,7 +52,27 @@ const Saves: React.FC<SavesProps> = ({ onNavigate }) => {
   };
 
   const handleResumeGame = (game: Game) => {
+    console.log("Reprise de la partie ID:", game.id);
     localStorage.setItem("currentGameId", game.id.toString());
+
+    const storedSaves = localStorage.getItem("escape_saves");
+    const currentSave = storedSaves ? JSON.parse(storedSaves).find((save: any) => save.id === game.id) : null;
+
+    if (!currentSave) {
+      const updatedSaves = storedSaves ? JSON.parse(storedSaves) : [];
+      updatedSaves.push({
+        id: game.id,
+        currentStep: game.step,
+        timerSeconds: game.remainingSeconds,
+        penalties: 0,
+        logs: [{ time: "00:00", msg: "Reprise de la partie" }],
+        isCompleted: game.isFinished,
+        name: game.teamName,
+        pseudo: game.teamName,
+      });
+      localStorage.setItem("escape_saves", JSON.stringify(updatedSaves));
+    }
+
     onNavigate("game");
   };
 
@@ -80,7 +100,7 @@ const Saves: React.FC<SavesProps> = ({ onNavigate }) => {
     <div id="saves" className="page active" style={{ padding: 0 }}>
       <nav>
         <div className="nav-logo">
-          CIPHER<span>ROOM</span>
+          MATMAX<span>SCAPE</span>
         </div>
         <div className="nav-right">
           <span>SESSION ACTIVE</span>
@@ -191,7 +211,10 @@ const Saves: React.FC<SavesProps> = ({ onNavigate }) => {
                 <div
                   key={game.id}
                   className="panel save-card"
-                  onClick={() => handleResumeGame(game)}
+                  onClick={(e) => {
+                        e.stopPropagation();
+                        handleResumeGame(game);
+                      }}
                   style={{ cursor: 'pointer' }}
                 >
                   <div className="panel-corner tl"></div>
@@ -226,8 +249,12 @@ const Saves: React.FC<SavesProps> = ({ onNavigate }) => {
 
                   <div className="save-actions">
                     <button
+                      type="button"
                       className="btn btn-orange"
-                      onClick={() => handleResumeGame(game)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleResumeGame(game);
+                      }}
                     >
                       REPRENDRE
                     </button>
