@@ -94,7 +94,7 @@
         "rules": [
             {
                 "t": "gt",
-                "v": "30",
+                "v": "35",
                 "vt": "str"
             },
             {
@@ -131,7 +131,8 @@
         "y": 440,
         "wires": [
             [
-                "b71f8d5fa5f38672"
+                "b71f8d5fa5f38672",
+                "68aecd6f29b2d07a"
             ]
         ]
     },
@@ -140,7 +141,7 @@
         "type": "function",
         "z": "f6f2187d.f17ca8",
         "name": "alerte",
-        "func": "// Préparer le corps JSON pour le webhook Google Sheets\nmsg.payload = {\n    device_id: msg.payload.device_id || \"esp32-01\",\n    temperature: msg.payload.temperature,\n    type: \"alerte\"\n};\nmsg.headers = { \"Content-Type\": \"application/json\" };\nreturn msg;",
+        "func": "msg.payload = {\n    device_id:  msg.payload.device_id || \"esp32-01\",\n    temperature: msg.payload.temperature,\n    type: \"alerte\"\n};\n\nmsg.headers = {\n    \"Content-Type\": \"application/json\"\n};\n\nreturn msg;",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
@@ -161,9 +162,9 @@
         "z": "f6f2187d.f17ca8",
         "name": "",
         "method": "POST",
-        "ret": "obj",
+        "ret": "txt",
         "paytoqs": "ignore",
-        "url": "https://script.google.com/macros/s/AKfycbyoZuLm7NHrsGj-XDpN62qQHlX6gO--XBXRuKoKwxpacYyaOBMTyjmnzxqW0u90HJtn/exec",
+        "url": "https://script.google.com/macros/s/AKfycbyu2M6yDkGSpRddwe5X6aapNU1wzr2oYLYVesvSlxvVlowasrnjEuR5tapm4Fmt-mKZ/exec",
         "tls": "",
         "persist": false,
         "proxy": "",
@@ -179,7 +180,7 @@
             }
         ],
         "x": 1110,
-        "y": 300,
+        "y": 260,
         "wires": [
             []
         ]
@@ -197,8 +198,8 @@
         "targetType": "msg",
         "statusVal": "",
         "statusType": "auto",
-        "x": 640,
-        "y": 400,
+        "x": 660,
+        "y": 480,
         "wires": []
     },
     {
@@ -215,8 +216,8 @@
         "retentionPolicyV18Flux": "",
         "org": "iot-campus",
         "bucket": "iot_data",
-        "x": 730,
-        "y": 480,
+        "x": 720,
+        "y": 400,
         "wires": []
     },
     {
@@ -227,7 +228,7 @@
         "method": "POST",
         "ret": "obj",
         "paytoqs": "ignore",
-        "url": "http://localhost:3001/api/iot/uplink",
+        "url": "http://10.44.20.4:3001/api/iot/uplink",
         "tls": "",
         "persist": false,
         "proxy": "",
@@ -239,10 +240,10 @@
                 "keyType": "msg",
                 "keyValue": "",
                 "valueType": "msg",
-                "valueValue": "paylaod"
+                "valueValue": "payload"
             }
         ],
-        "x": 650,
+        "x": 670,
         "y": 440,
         "wires": [
             []
@@ -317,16 +318,16 @@
         "port": 8086,
         "protocol": "http",
         "database": "database",
-        "name": "API rest post payload",
+        "name": "Data explorer",
         "usetls": false,
         "tls": "",
         "influxdbVersion": "2.0",
-        "url": "http://localhost:3001/api/iot/uplink",
+        "url": "http://influxdb:8086 ",
         "timeout": 10,
         "rejectUnauthorized": true
     },
     {
-        "id": "e068fa92922a84d2",
+        "id": "681693f4ea9068d3",
         "type": "global-config",
         "env": [],
         "modules": {
