@@ -1,6 +1,12 @@
 # Backend API - Escape Game
 
-API REST pour gérer un escape game avec 3 énigmes, utilisant une base de données JSON pour le développement.
+API REST pour le projet IoT Escape Game, gérant les parties et la réception des données capteurs LoRaWAN.
+
+Ce service sert à :
+- créer et suivre les parties d'escape game
+- valider les étapes en fonction des mesures de température, luminosité et du code keypad
+- recevoir et stocker les données IoT depuis Node-RED / TTN
+- exposer les dernières mesures via une API REST
 
 ## Installation
 
@@ -10,7 +16,14 @@ npm install
 npm run dev
 ```
 
-Le serveur démarre sur `http://localhost:3001`
+Le serveur démarre sur `http://localhost:3001`.
+
+## Architecture technique
+
+- Express.js pour l'API REST
+- Socket.IO pour les mises à jour temps réel
+- Stockage simple dans `backend/data/escape_game.json`
+- Endpoints IoT pour recevoir les payloads capteurs
 
 ## Endpoints API
 
