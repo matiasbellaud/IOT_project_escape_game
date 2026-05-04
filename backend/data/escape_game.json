@@ -1,18 +1,8 @@
 {
   "games": [
-    {
-      "id": 1,
-      "teamName": "Max",
-      "step": 1,
-      "remainingSeconds": 0,
-      "isFinished": false,
-      "finishedAt": null,
-      "durationSeconds": null,
-      "createdAt": "2026-05-04T12:26:56.793Z",
-      "updatedAt": "2026-05-04T12:26:56.793Z"
-    }
   ],
-  "sensorPayloads": [],
-  "nextGameId": 2,
+  "sensorPayloads": [
+  ],
+  "nextGameId": 1,
   "nextPayloadId": 1
 }
