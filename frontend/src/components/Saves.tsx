@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import type { Page } from "../App";
-import { useGameState, Game } from "../hooks/useGameState";
+import { useGameState } from "../hooks/useGameState";
+import type { Game } from "../hooks/useGameState";
 
 interface SavesProps {
   onNavigate: (page: Page) => void;

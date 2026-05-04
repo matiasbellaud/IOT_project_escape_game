@@ -102,5 +102,4 @@ class ApiService {
   }
 }
 
-export const apiService = new ApiService();</content>
-<parameter name="filePath">c:\Users\bella\Desktop\cours\M1\IOT\Projet\IOT_project_escape_game\frontend\src\services\api.ts
+export const apiService = new ApiService();

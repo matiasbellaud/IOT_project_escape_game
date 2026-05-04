@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiService, type Game, type SensorPayload } from '../services/api';
 
+export type { Game };
+
 export interface GameState {
   currentGame: Game | null;
   sensorData: SensorPayload[];
@@ -16,7 +18,7 @@ export const useGameState = () => {
     error: null,
   });
 
-  const [pollingInterval, setPollingInterval] = useState<NodeJS.Timeout | null>(null);
+  const [pollingInterval, setPollingInterval] = useState<ReturnType<typeof setInterval> | null>(null);
 
   const updateState = useCallback((updates: Partial<GameState>) => {
     setState(prev => ({ ...prev, ...updates }));
