@@ -496,10 +496,7 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
                   ))}
                 </div>
               </div>
-
-              <button className="btn btn-orange" onClick={validateCode}>
-                VALIDER LE CODE
-              </button>
+              
               <div
                 style={{
                   fontFamily: '"Share Tech Mono", monospace',
