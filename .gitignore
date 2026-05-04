@@ -1,0 +1,45 @@
+/node_modules/
+/dist/
+/build/
+/.cache/
+/.vite/
+/npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# VS Code
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backend
+/backend/node_modules/
+/backend/dist/
+/backend/.env
+/backend/*.log
+
+# Frontend
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.env*
+
+# Arduino / build artefacts
+/arduino/**/*.elf
+/arduino/**/*.hex
+/arduino/**/*.bin
+/arduino/**/.pio/
+/arduino/**/*.o
+/arduino/**/*.map
+
+# Docker
+/docker/**/*.log
+/docker/**/tmp
+
+# nodered
+/nodered/.config.json
