@@ -1,0 +1,336 @@
+[
+    {
+        "id": "f6f2187d.f17ca8",
+        "type": "tab",
+        "label": "Flow 1",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "82522ce57b70dace",
+        "type": "mqtt in",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "topic": "v3/tpmatmax@ttn/devices/+/up",
+        "qos": "1",
+        "datatype": "json",
+        "broker": "2ac43d78dd6fd493",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 310,
+        "y": 300,
+        "wires": [
+            [
+                "18e6e7008fee461c"
+            ]
+        ]
+    },
+    {
+        "id": "1b3fc06841e2a762",
+        "type": "mqtt in",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "topic": "test/campus/#",
+        "qos": "2",
+        "datatype": "auto-detect",
+        "broker": "8330dc3f49175ab7",
+        "nl": false,
+        "rap": true,
+        "rh": 0,
+        "inputs": 0,
+        "x": 250,
+        "y": 540,
+        "wires": [
+            [
+                "01156c91d6342dd3"
+            ]
+        ]
+    },
+    {
+        "id": "01156c91d6342dd3",
+        "type": "debug",
+        "z": "f6f2187d.f17ca8",
+        "name": "debug 2",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "false",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 540,
+        "y": 540,
+        "wires": []
+    },
+    {
+        "id": "18e6e7008fee461c",
+        "type": "function",
+        "z": "f6f2187d.f17ca8",
+        "name": "décodage payload hexa",
+        "func": "// Décodage du payload brut (base64 → Buffer)\nvar buf = Buffer.from(msg.payload.uplink_message.frm_payload, 'base64');\n\nif (buf.length < 5) {\n    node.error(\"Payload trop court\");\n    return null;\n}\n\n// Température : 2 octets big-endian, divisé par 100\nvar rawTemp = (buf[0] << 8) | buf[1];\nvar temperature = rawTemp / 100.0;\n\n// Humidité : 1 octet\nvar humidity = buf[2];\n\n// Luminosity : 2 octet\nvar luminosity = (buf[3] << 8) | buf[4];\n\n// Keypad : 4 octet\nvar keypad = buf.slice(5, 9).toString('ascii');\n\nmsg.payload = {\n    temperature: temperature,\n    humidity: humidity,\n    luminosity: luminosity,\n    keypad : keypad,\n    device_id: msg.payload.end_device_ids.device_id,\n    timestamp: new Date().toISOString()\n};\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 590,
+        "y": 300,
+        "wires": [
+            [
+                "dc4a3c5722eb01cc"
+            ]
+        ]
+    },
+    {
+        "id": "dc4a3c5722eb01cc",
+        "type": "switch",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "property": "payload.temperature",
+        "propertyType": "msg",
+        "rules": [
+            {
+                "t": "gt",
+                "v": "30",
+                "vt": "str"
+            },
+            {
+                "t": "else"
+            }
+        ],
+        "checkall": "true",
+        "repair": false,
+        "outputs": 2,
+        "x": 800,
+        "y": 300,
+        "wires": [
+            [
+                "d92aa45ea751c144"
+            ],
+            [
+                "a106fdec4bb15c3f"
+            ]
+        ]
+    },
+    {
+        "id": "a106fdec4bb15c3f",
+        "type": "function",
+        "z": "f6f2187d.f17ca8",
+        "name": "Format influxdb",
+        "func": "msg.payload = {\n    device: String(msg.payload.device_id),\n    temperature: parseFloat(msg.payload.temperature),\n    humidity: parseFloat(msg.payload.humidity),\n    luminosity: parseFloat(msg.payload.luminosity),\n    keypad: String(msg.payload.keypad)\n}\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 420,
+        "y": 440,
+        "wires": [
+            [
+                "b71f8d5fa5f38672"
+            ]
+        ]
+    },
+    {
+        "id": "d92aa45ea751c144",
+        "type": "function",
+        "z": "f6f2187d.f17ca8",
+        "name": "alerte",
+        "func": "// Préparer le corps JSON pour le webhook Google Sheets\nmsg.payload = {\n    device_id: msg.payload.device_id || \"esp32-01\",\n    temperature: msg.payload.temperature,\n    type: \"alerte\"\n};\nmsg.headers = { \"Content-Type\": \"application/json\" };\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 950,
+        "y": 260,
+        "wires": [
+            [
+                "292206fa1e9bb0c6"
+            ]
+        ]
+    },
+    {
+        "id": "292206fa1e9bb0c6",
+        "type": "http request",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "https://script.google.com/macros/s/AKfycbyoZuLm7NHrsGj-XDpN62qQHlX6gO--XBXRuKoKwxpacYyaOBMTyjmnzxqW0u90HJtn/exec",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [
+            {
+                "keyType": "msg",
+                "keyValue": "",
+                "valueType": "msg",
+                "valueValue": "payload"
+            }
+        ],
+        "x": 1110,
+        "y": 300,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "941a348adf3b8f54",
+        "type": "debug",
+        "z": "f6f2187d.f17ca8",
+        "name": "debug 1",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "tostatus": false,
+        "complete": "payload",
+        "targetType": "msg",
+        "statusVal": "",
+        "statusType": "auto",
+        "x": 640,
+        "y": 400,
+        "wires": []
+    },
+    {
+        "id": "68aecd6f29b2d07a",
+        "type": "influxdb out",
+        "z": "f6f2187d.f17ca8",
+        "influxdb": "57147a1584cc7a09",
+        "name": "",
+        "measurement": "capteurs",
+        "precision": "",
+        "retentionPolicy": "",
+        "database": "database",
+        "precisionV18FluxV20": "ms",
+        "retentionPolicyV18Flux": "",
+        "org": "iot-campus",
+        "bucket": "iot_data",
+        "x": 730,
+        "y": 480,
+        "wires": []
+    },
+    {
+        "id": "b71f8d5fa5f38672",
+        "type": "http request",
+        "z": "f6f2187d.f17ca8",
+        "name": "",
+        "method": "POST",
+        "ret": "obj",
+        "paytoqs": "ignore",
+        "url": "http://localhost:3001/api/iot/uplink",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": false,
+        "headers": [
+            {
+                "keyType": "msg",
+                "keyValue": "",
+                "valueType": "msg",
+                "valueValue": "paylaod"
+            }
+        ],
+        "x": 650,
+        "y": 440,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "2ac43d78dd6fd493",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "eu1.cloud.thethings.network",
+        "port": "1883",
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "8330dc3f49175ab7",
+        "type": "mqtt-broker",
+        "name": "",
+        "broker": "mosquitto",
+        "port": 1883,
+        "clientid": "",
+        "autoConnect": true,
+        "usetls": false,
+        "protocolVersion": 4,
+        "keepalive": 60,
+        "cleansession": true,
+        "autoUnsubscribe": true,
+        "birthTopic": "",
+        "birthQos": "0",
+        "birthRetain": "false",
+        "birthPayload": "",
+        "birthMsg": {},
+        "closeTopic": "",
+        "closeQos": "0",
+        "closeRetain": "false",
+        "closePayload": "",
+        "closeMsg": {},
+        "willTopic": "",
+        "willQos": "0",
+        "willRetain": "false",
+        "willPayload": "",
+        "willMsg": {},
+        "userProps": "",
+        "sessionExpiry": ""
+    },
+    {
+        "id": "57147a1584cc7a09",
+        "type": "influxdb",
+        "hostname": "127.0.0.1",
+        "port": 8086,
+        "protocol": "http",
+        "database": "database",
+        "name": "API rest post payload",
+        "usetls": false,
+        "tls": "",
+        "influxdbVersion": "2.0",
+        "url": "http://localhost:3001/api/iot/uplink",
+        "timeout": 10,
+        "rejectUnauthorized": true
+    },
+    {
+        "id": "e068fa92922a84d2",
+        "type": "global-config",
+        "env": [],
+        "modules": {
+            "node-red-contrib-influxdb": "0.7.0"
+        }
+    }
+]

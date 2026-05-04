@@ -1,19 +1,24 @@
 import React, { useState } from "react";
 import type { Page } from "../App";
+import { useGameState } from "../hooks/useGameState";
 
 interface LoginProps {
   onNavigate: (page: Page) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onNavigate }) => {
-  const [pseudo, setPseudo] = useState("");
+  const [teamName, setTeamName] = useState("");
+  const { createGame, isLoading, error } = useGameState();
 
-  const handleEnterGame = (e: React.FormEvent) => {
+  const handleEnterGame = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (pseudo.trim()) {
-      localStorage.setItem("pseudo", pseudo.trim());
-      onNavigate("saves");
+    if (teamName.trim()) {
+      const game = await createGame(teamName.trim());
+      if (game) {
+        localStorage.setItem("currentGameId", game.id.toString());
+        onNavigate("game");
+      }
     }
   };
 
@@ -35,23 +40,41 @@ const Login: React.FC<LoginProps> = ({ onNavigate }) => {
           <div className="panel-corner br"></div>
 
           <div className="field-group">
-            <label className="field-label">Pseudo</label>
+            <label className="field-label">Nom de l'équipe</label>
             <input
               className="field-input"
               type="text"
-              value={pseudo}
-              onChange={(e) => setPseudo(e.target.value)}
-              placeholder="Entrez votre pseudo"
+              value={teamName}
+              onChange={(e) => setTeamName(e.target.value)}
+              placeholder="Entrez le nom de votre équipe"
               required
+              disabled={isLoading}
             />
           </div>
+
+          {error && (
+            <div className="error-message" style={{
+              color: '#ff4444',
+              fontSize: '14px',
+              marginBottom: '10px',
+              textAlign: 'center'
+            }}>
+              {error}
+            </div>
+          )}
 
           <button
             type="submit"
             className="btn btn-lg"
-            style={{ width: "100%", clipPath: "none", textAlign: "center" }}
+            style={{
+              width: "100%",
+              clipPath: "none",
+              textAlign: "center",
+              opacity: isLoading ? 0.6 : 1
+            }}
+            disabled={isLoading}
           >
-            ENTRER DANS LE JEU
+            {isLoading ? "CRÉATION DE LA PARTIE..." : "COMMENCER L'ESCAPE GAME"}
           </button>
 
           <div className="status-bar">

@@ -1,56 +1,78 @@
 import React, { useState, useEffect } from "react";
 import type { Page } from "../App";
+import { useGameState, Game } from "../hooks/useGameState";
 
 interface SavesProps {
   onNavigate: (page: Page) => void;
 }
 
 const Saves: React.FC<SavesProps> = ({ onNavigate }) => {
-  const pseudo = localStorage.getItem("pseudo") || "Joueur";
   const [showNewForm, setShowNewForm] = useState(false);
-  const [saveName, setSaveName] = useState("");
-  const [saves, setSaves] = useState<any[]>([]);
+  const [newGameName, setNewGameName] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+  const {
+    loadGameHistory,
+    loadUnfinishedGames,
+    createGame,
+    error,
+    setError
+  } = useGameState();
+
+  const [allGames, setAllGames] = useState<Game[]>([]);
+  const [unfinishedGames, setUnfinishedGames] = useState<Game[]>([]);
 
   useEffect(() => {
-    const storedSaves = localStorage.getItem("escape_saves");
-    if (storedSaves) {
-      setSaves(JSON.parse(storedSaves));
-    }
+    loadGames();
   }, []);
 
-  const handleCreateSave = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (saveName.trim()) {
-      const newGameData = {
-        id: Date.now().toString(), // ID unique généré
-        name: saveName.trim(),
-        pseudo: pseudo,
-        startTime: new Date().toISOString(),
-        currentStep: 1,
-        timerSeconds: 42 * 60 + 17,
-        penalties: 0,
-        logs: [{ time: "42:17", msg: "Session démarrée" }],
-        isCompleted: false,
-      };
+  const loadGames = async () => {
+    const history = await loadGameHistory();
+    const unfinished = await loadUnfinishedGames();
+    setAllGames(history);
+    setUnfinishedGames(unfinished);
+  };
 
-      const updatedSaves = [...saves, newGameData];
-      setSaves(updatedSaves);
-      localStorage.setItem("escape_saves", JSON.stringify(updatedSaves));
-      localStorage.setItem("currentSaveId", newGameData.id);
-      onNavigate("game");
+  const handleCreateGame = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newGameName.trim()) return;
+
+    setIsCreating(true);
+    try {
+      const game = await createGame(newGameName.trim());
+      if (game) {
+        localStorage.setItem("currentGameId", game.id.toString());
+        onNavigate("game");
+      }
+    } catch (err) {
+      console.error("Erreur lors de la création:", err);
+    } finally {
+      setIsCreating(false);
     }
   };
 
-  const handleResumeSave = (id: string) => {
-    localStorage.setItem("currentSaveId", id);
+  const handleResumeGame = (game: Game) => {
+    localStorage.setItem("currentGameId", game.id.toString());
     onNavigate("game");
   };
 
-  const handleDeleteSave = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const updatedSaves = saves.filter((s) => s.id !== id);
-    setSaves(updatedSaves);
-    localStorage.setItem("escape_saves", JSON.stringify(updatedSaves));
+  const formatDuration = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('fr-FR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getProgressPercentage = (step: number) => {
+    return Math.round((step / 3) * 100);
   };
 
   return (
@@ -62,8 +84,8 @@ const Saves: React.FC<SavesProps> = ({ onNavigate }) => {
         <div className="nav-right">
           <span>SESSION ACTIVE</span>
           <div className="nav-user">
-            <div className="avatar">{pseudo.charAt(0).toUpperCase()}</div>
-            <span>{pseudo}</span>
+            <div className="avatar">🎯</div>
+            <span>AGENT</span>
           </div>
           <button className="btn" onClick={() => onNavigate("login")}>
             DÉCONNEXION
@@ -72,88 +94,28 @@ const Saves: React.FC<SavesProps> = ({ onNavigate }) => {
       </nav>
 
       <div className="saves-content">
-        <div className="page-title">MES SAUVEGARDES</div>
+        <div className="page-title">ESCAPE GAME - HISTORIQUE</div>
         <div className="page-subtitle">
-          {saves.length > 0
-            ? `// ${saves.length} SESSION(S) TROUVÉE(S) — CHOISISSEZ VOTRE MISSION //`
-            : "// AUCUNE SESSION TROUVÉE — DÉMARREZ UNE NOUVELLE MISSION //"}
+          {unfinishedGames.length > 0
+            ? `// ${unfinishedGames.length} PARTIE(S) EN COURS — ${allGames.length} PARTIE(S) TOTALE(S) //`
+            : `// ${allGames.length} PARTIE(S) ARCHIVÉE(S) — CRÉEZ UNE NOUVELLE MISSION //`}
         </div>
 
-        {saves.length > 0 && (
-          <div className="saves-grid">
-            {saves.map((save) => (
-              <div
-                key={save.id}
-                className={`panel save-card ${save.isCompleted ? "completed" : ""}`}
-                onClick={() => !save.isCompleted && handleResumeSave(save.id)}
-              >
-                <div className="panel-corner tl"></div>
-                <div className="panel-corner tr"></div>
-                <div className="panel-corner bl"></div>
-                <div className="panel-corner br"></div>
-
-                <div
-                  className={`save-badge ${save.isCompleted ? "badge-completed" : "badge-progress"}`}
-                >
-                  {save.isCompleted ? "TERMINÉE" : "EN COURS"}
-                </div>
-                <div className="save-title">{save.name.toUpperCase()}</div>
-                <div className="save-meta">
-                  JOUEUR: {save.pseudo} · TEMPS REQUIS:{" "}
-                  {Math.floor((42 * 60 + 17 - save.timerSeconds) / 60)} MIN
-                </div>
-
-                <div className="save-progress-bar">
-                  <div
-                    className={`save-progress-fill ${save.isCompleted ? "green" : "orange"}`}
-                    style={{ width: `${(save.currentStep / 3) * 100}%` }}
-                  ></div>
-                </div>
-                <div
-                  style={{
-                    fontFamily: '"Share Tech Mono", monospace',
-                    fontSize: "11px",
-                    color: save.isCompleted
-                      ? "var(--success)"
-                      : "var(--text-dim)",
-                    marginBottom: "8px",
-                  }}
-                >
-                  PROGRESSION: {save.currentStep}/3 ÉNIGMES{" "}
-                  {save.isCompleted && "✓"}
-                </div>
-
-                <div className="save-actions">
-                  {!save.isCompleted ? (
-                    <button
-                      className="btn btn-orange"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleResumeSave(save.id);
-                      }}
-                    >
-                      REPRENDRE
-                    </button>
-                  ) : (
-                    <button
-                      className="btn btn-success"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      VOIR RÉSULTATS
-                    </button>
-                  )}
-                  <button
-                    className="btn btn-danger"
-                    onClick={(e) => handleDeleteSave(save.id, e)}
-                  >
-                    SUPPRIMER
-                  </button>
-                </div>
-              </div>
-            ))}
+        {error && (
+          <div className="error-message" style={{
+            color: '#ff4444',
+            fontSize: '14px',
+            marginBottom: '20px',
+            textAlign: 'center',
+            padding: '10px',
+            background: 'rgba(255, 68, 68, 0.1)',
+            border: '1px solid #ff4444'
+          }}>
+            {error}
           </div>
         )}
 
+        {/* Section nouvelle partie */}
         <div className="new-game-section">
           {!showNewForm ? (
             <>
@@ -171,47 +133,176 @@ const Saves: React.FC<SavesProps> = ({ onNavigate }) => {
               </button>
             </>
           ) : (
-            <form
-              className="panel"
-              style={{ width: "100%", padding: "20px" }}
-              onSubmit={handleCreateSave}
-            >
-              <div className="panel-corner tl"></div>
-              <div className="panel-corner tr"></div>
-              <div className="panel-corner bl"></div>
-              <div className="panel-corner br"></div>
-
-              <div className="field-group">
-                <label className="field-label">Nom de la sauvegarde</label>
-                <input
-                  className="field-input"
-                  type="text"
-                  value={saveName}
-                  onChange={(e) => setSaveName(e.target.value)}
-                  placeholder="Ex: Opération Alpha"
-                  required
-                  autoFocus
-                />
-              </div>
-
-              <div style={{ display: "flex", gap: "10px", marginTop: "15px" }}>
-                <button type="submit" className="btn btn-orange">
-                  DÉMARRER
-                </button>
-                <button
-                  type="button"
-                  className="btn"
-                  onClick={() => setShowNewForm(false)}
-                >
-                  ANNULER
-                </button>
-              </div>
-            </form>
+            <div className="new-game-form">
+              <h3>CRÉER UNE NOUVELLE PARTIE</h3>
+              <form onSubmit={handleCreateGame}>
+                <div className="form-group">
+                  <label htmlFor="teamName">NOM D'ÉQUIPE</label>
+                  <input
+                    id="teamName"
+                    type="text"
+                    value={newGameName}
+                    onChange={(e) => setNewGameName(e.target.value)}
+                    placeholder="Entrez le nom de votre équipe"
+                    required
+                    disabled={isCreating}
+                  />
+                </div>
+                <div className="form-actions">
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setShowNewForm(false);
+                      setNewGameName("");
+                      setError(null);
+                    }}
+                    disabled={isCreating}
+                  >
+                    ANNULER
+                  </button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={isCreating || !newGameName.trim()}
+                  >
+                    {isCreating ? "CRÉATION..." : "CRÉER LA PARTIE"}
+                  </button>
+                </div>
+              </form>
+            </div>
           )}
         </div>
+
+        {/* Parties en cours */}
+        {unfinishedGames.length > 0 && (
+          <div style={{ marginBottom: '40px' }}>
+            <h3 style={{
+              color: 'var(--accent)',
+              fontSize: '18px',
+              marginBottom: '20px',
+              textAlign: 'center'
+            }}>
+              // PARTIES EN COURS //
+            </h3>
+            <div className="saves-grid">
+              {unfinishedGames.map((game) => (
+                <div
+                  key={game.id}
+                  className="panel save-card"
+                  onClick={() => handleResumeGame(game)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className="panel-corner tl"></div>
+                  <div className="panel-corner tr"></div>
+                  <div className="panel-corner bl"></div>
+                  <div className="panel-corner br"></div>
+
+                  <div className="save-badge badge-progress">
+                    EN COURS
+                  </div>
+                  <div className="save-title">{game.teamName.toUpperCase()}</div>
+                  <div className="save-meta">
+                    ÉTAPE: {game.step}/3 · CRÉÉE: {formatDate(game.createdAt)}
+                  </div>
+
+                  <div className="save-progress-bar">
+                    <div
+                      className="save-progress-fill orange"
+                      style={{ width: `${getProgressPercentage(game.step)}%` }}
+                    ></div>
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: '"Share Tech Mono", monospace',
+                      fontSize: "11px",
+                      color: "var(--text-dim)",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    PROGRESSION: {game.step}/3 ÉNIGMES
+                  </div>
+
+                  <div className="save-actions">
+                    <button
+                      className="btn btn-orange"
+                      onClick={() => handleResumeGame(game)}
+                    >
+                      REPRENDRE
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Historique complet */}
+        {allGames.filter(game => game.isFinished).length > 0 && (
+          <div>
+            <h3 style={{
+              color: 'var(--text-dim)',
+              fontSize: '16px',
+              marginBottom: '20px',
+              textAlign: 'center'
+            }}>
+              // HISTORIQUE COMPLET //
+            </h3>
+            <div className="saves-grid">
+              {allGames
+                .filter(game => game.isFinished)
+                .map((game) => (
+                <div
+                  key={game.id}
+                  className="panel save-card completed"
+                >
+                  <div className="panel-corner tl"></div>
+                  <div className="panel-corner tr"></div>
+                  <div className="panel-corner bl"></div>
+                  <div className="panel-corner br"></div>
+
+                  <div className="save-badge badge-completed">
+                    TERMINÉE
+                  </div>
+                  <div className="save-title">{game.teamName.toUpperCase()}</div>
+                  <div className="save-meta">
+                    DURÉE: {game.durationSeconds ? formatDuration(game.durationSeconds) : 'N/A'} · FINIE: {game.finishedAt ? formatDate(game.finishedAt) : 'N/A'}
+                  </div>
+
+                  <div className="save-progress-bar">
+                    <div
+                      className="save-progress-fill green"
+                      style={{ width: '100%' }}
+                    ></div>
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: '"Share Tech Mono", monospace',
+                      fontSize: "11px",
+                      color: "var(--success)",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    MISSION ACCOMPLIE ✓
+                  </div>
+
+                  <div className="save-actions">
+                    <button
+                      className="btn btn-success"
+                      onClick={() => {/* TODO: Afficher détails */}}
+                    >
+                      DÉTAILS
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 export default Saves;
+

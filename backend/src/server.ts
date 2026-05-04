@@ -130,6 +130,7 @@ app.post("/api/game/:id/complete", async (req: Request, res: Response) => {
 // --- ROUTES IOT ---
 
 app.post("/api/iot/uplink", async (req: Request, res: Response) => {
+  console.log("test");
   try {
     const payload = req.body;
     const { device, temperature, humidity, luminosity, keypad } = payload ?? {};
