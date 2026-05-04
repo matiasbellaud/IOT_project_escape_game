@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
 import type { Page } from "../App";
+import { apiService } from "../services/api";
+import { io } from "socket.io-client";
 
 interface GameProps {
   onNavigate: (page: Page) => void;
@@ -16,11 +18,11 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
   const [logs, setLogs] = useState<{ time: string; msg: string }[]>([]);
 
   useEffect(() => {
-    const currentId = localStorage.getItem("currentSaveId");
+    const currentId = localStorage.getItem("currentGameId");
     const storedSaves = localStorage.getItem("escape_saves");
     if (currentId && storedSaves) {
       const parsedSaves = JSON.parse(storedSaves);
-      const save = parsedSaves.find((s: any) => s.id === currentId);
+      const save = parsedSaves.find((s: any) => s.id.toString() === currentId);
       if (save) {
         setGameData(save);
         setCurrentStep(save.currentStep || 1);
@@ -37,25 +39,28 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
   }, [onNavigate]);
 
   // --- ÉTATS DES ÉNIGMES ---
-  // Énigme 1 (Temp/Hum)
-  const [temp, setTemp] = useState(8);
-  const [hum, setHum] = useState(87);
+  // Énigme 1 (Température DHT11)
+  const initialTempSequence = [22, 25, 27, 30];
+  const [temp, setTemp] = useState(initialTempSequence[0]);
+  const [hum, setHum] = useState(65);
   const [step1Done, setStep1Done] = useState(false);
+  const [tempIndex, setTempIndex] = useState(0);
 
-  // Énigme 2 (Code)
+  // Énigme 2 (LDR lumière)
+  const lightSequence = [820, 450, 95, 12];
+  const [lux, setLux] = useState(lightSequence[0]);
+  const [step2Done, setStep2Done] = useState(false);
+  const [lightIndex, setLightIndex] = useState(0);
+
+  // Énigme 3 (Code)
   const [code, setCode] = useState<string[]>([]);
   const [codeError, setCodeError] = useState(false);
-  const [codeHint, setCodeHint] = useState(
-    "(Indice : 4 = année de fondation ÷ 500 = 2 · fenêtres dans la pièce = 0 · ...)",
-  );
-  const [step2Done, setStep2Done] = useState(false);
-  const SECRET_CODE = "2022";
-
-  // Énigme 3 (Lumière)
-  const [lux, setLux] = useState(247);
-  const [targetRevealed, setTargetRevealed] = useState(false);
+  const [codeHint, setCodeHint] = useState("Entrez le code à 4 chiffres.");
   const [step3Done, setStep3Done] = useState(false);
-  const TARGET_LUX = 300;
+  const SECRET_CODE = "4327";
+
+  const [socketConnected, setSocketConnected] = useState(false);
+  const [iotEvent, setIotEvent] = useState<string | null>(null);
 
   // --- GESTION DU MINUTEUR ---
   useEffect(() => {
@@ -79,31 +84,80 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
     setLogs((prev) => [...prev, { time: formatTime(timerSeconds), msg }]);
   };
 
-  // --- ACTIONS ÉNIGME 1 ---
-  const handleTempChange = (newTemp: number) => {
-    setTemp(newTemp);
-    setHum(Math.min(99, Math.max(40, Math.round(87 + (8 - newTemp) * 0.8))));
-    if (newTemp <= 2 && !step1Done) {
-      setStep1Done(true);
-      addLog("Seuil de température atteint !");
+  const TEMPERATURE_SEQUENCE = [22, 25, 27, 30];
+  const LDR_SEQUENCE = [820, 450, 95, 12];
+
+  const sendSensorPayload = async (payload: {
+    device: string;
+    temperature: number;
+    humidity: number;
+    luminosity: number;
+    keypad: string;
+  }) => {
+    try {
+      const result = await apiService.sendSensorPayload(payload);
+      setIotEvent(result.message);
+      addLog(`Payload envoyé (${payload.device})`);
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : "Erreur envoi payload";
+      setIotEvent(errMsg);
+      addLog(`Erreur d'envoi payload: ${errMsg}`);
     }
   };
 
-  // --- ACTIONS ÉNIGME 2 ---
+  const handleSendTemp = async () => {
+    if (step1Done) return;
+    const nextIndex = Math.min(tempIndex + 1, TEMPERATURE_SEQUENCE.length - 1);
+    const nextTemp = TEMPERATURE_SEQUENCE[nextIndex];
+    const nextHum = Math.max(35, 70 - (nextTemp - TEMPERATURE_SEQUENCE[0]) * 2);
+
+    setTemp(nextTemp);
+    setHum(nextHum);
+    setTempIndex(nextIndex);
+
+    await sendSensorPayload({
+      device: "DHT11",
+      temperature: nextTemp,
+      humidity: nextHum,
+      luminosity: lux,
+      keypad: "",
+    });
+  };
+
+  const handleSendLight = async () => {
+    if (step2Done) return;
+    const nextIndex = Math.min(lightIndex + 1, LDR_SEQUENCE.length - 1);
+    const nextLux = LDR_SEQUENCE[nextIndex];
+
+    setLux(nextLux);
+    setLightIndex(nextIndex);
+
+    await sendSensorPayload({
+      device: "LDR",
+      temperature: temp,
+      humidity: hum,
+      luminosity: nextLux,
+      keypad: "",
+    });
+  };
+
   const typeDigit = (digit: string) => {
     if (code.length < 4) setCode([...code, digit]);
   };
+
   const deleteDigit = () => {
     setCode(code.slice(0, -1));
   };
+
   const validateCode = () => {
     if (code.length < 4) {
       setCodeHint("⚠ Entrez 4 chiffres complets.");
       return;
     }
     if (code.join("") === SECRET_CODE) {
-      setStep2Done(true);
-      addLog("Code correct — terminal déverrouillé");
+      setStep3Done(true);
+      addLog("Code correct — coffre-fort déverrouillé");
+      setShowFinal(true);
     } else {
       setPenalties((p) => p + 50);
       setCodeError(true);
@@ -116,19 +170,43 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
     }
   };
 
-  // --- ACTIONS ÉNIGME 3 ---
-  const handleLightChange = (newLux: number) => {
-    setLux(newLux);
-    if (Math.abs(newLux - TARGET_LUX) <= 15 && !step3Done) {
-      setStep3Done(true);
-      addLog("Calibration lumineuse réussie !");
-    }
-  };
-  const revealTarget = () => {
-    setTargetRevealed(true);
-    setPenalties((p) => p + 5);
-    addLog("Valeur cible révélée (−5 pts)");
-  };
+  useEffect(() => {
+    if (!gameData) return;
+
+    const socket = io("http://localhost:3001", { transports: ["websocket"] });
+
+    socket.on("connect", () => {
+      setSocketConnected(true);
+      addLog("WebSocket connecté au back-end");
+    });
+
+    socket.on("disconnect", () => {
+      setSocketConnected(false);
+      setIotEvent("WebSocket déconnecté");
+      addLog("WebSocket déconnecté");
+    });
+
+    socket.on("game_state_init", (data: { currentStep: number }) => {
+      setCurrentStep(data.currentStep ?? 1);
+      addLog(`État initial reçu : étape ${data.currentStep}`);
+    });
+
+    socket.on("iot_update", (data: { currentStep: number; stepSolved: boolean; payload: any }) => {
+      setCurrentStep(data.currentStep ?? 1);
+      setIotEvent(data.stepSolved ? "Étape résolue côté back-end" : "Mesure reçue côté back-end");
+      addLog(`Mise à jour IoT reçue : étape ${data.currentStep}`);
+      if (data.stepSolved && data.currentStep === 2) {
+        setStep1Done(true);
+      }
+      if (data.stepSolved && data.currentStep === 3) {
+        setStep2Done(true);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [gameData]);
 
   // --- SCORES ---
   const speedBonus = Math.floor(timerSeconds / 6);
@@ -230,8 +308,8 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
               marginLeft: "8px",
             }}
           >
-            <div className="step-name">Code Secret</div>
-            <div className="step-sensor">SAISIE NUMÉRIQUE</div>
+            <div className="step-name">Capteur LDR</div>
+            <div className="step-sensor">LUMINOSITÉ</div>
           </div>
         </div>
         <div
@@ -252,8 +330,8 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
               marginLeft: "8px",
             }}
           >
-            <div className="step-name">Capteur Lumineux</div>
-            <div className="step-sensor">PHOTORÉSISTANCE</div>
+            <div className="step-name">Code Secret</div>
+            <div className="step-sensor">CRYPTAGE</div>
           </div>
         </div>
       </div>
@@ -265,11 +343,10 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
           {currentStep === 1 && (
             <div className="enigma active">
               <div className="enigma-tag">// ÉNIGME 01 — CAPTEUR DHT11</div>
-              <div className="enigma-title">LA TEMPÉRATURE DE L'OMBRE</div>
+              <div className="enigma-title">LE SOUFFLE DU SPHINX</div>
               <div className="enigma-desc">
-                Le capteur DHT11 surveille l'environnement en temps réel.
-                Analysez les données — la température anormalement basse indique
-                que quelque chose se cache ici.
+                Soufflez sur le capteur DHT11 pour réchauffer l'air autour de lui,
+                puis envoyez la mesure.
               </div>
 
               <div className="sensor-display">
@@ -280,11 +357,7 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
                   <div className="panel-corner br"></div>
                   <span className="sensor-icon">🌡️</span>
                   <div>
-                    <span
-                      className={`sensor-value ${temp < 10 ? "warning" : ""}`}
-                    >
-                      {temp.toFixed(1)}
-                    </span>
+                    <span className="sensor-value">{temp}</span>
                     <span className="sensor-unit">°C</span>
                   </div>
                   <div className="sensor-label">TEMPÉRATURE</div>
@@ -304,44 +377,41 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
               </div>
 
               <div className="enigma-riddle">
-                <strong>« Là où la glace naît dans l'obscurité,</strong> là où
-                l'air pleure à 87%, le seuil critique se cache entre le gel et
-                le zéro. Descendez sous les <strong>10 degrés</strong> et
-                l'ombre vous révélera son secret. »
+                <strong>« Je ne s'ouvre qu'à la chaleur du vivant.</strong>
+                Fais monter la température au-delà du seuil des 30 degrés.
               </div>
 
-              <label className="field-label">
-                SIMULER DÉPLACEMENT DU CAPTEUR:
-              </label>
+              <button className="btn btn-orange" onClick={handleSendTemp}>
+                SIMULER UN SOUFFLE & ENVOYER LA MESURE
+              </button>
+
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  marginBottom: "20px",
+                  fontFamily: '"Share Tech Mono", monospace',
+                  fontSize: "12px",
+                  color: "var(--text-dim)",
+                  marginTop: "10px",
                 }}
               >
-                <span className="slider-label">25°C</span>
-                <input
-                  type="range"
-                  min="1"
-                  max="25"
-                  step="0.5"
-                  value={temp}
-                  onChange={(e) => handleTempChange(parseFloat(e.target.value))}
-                />
-                <span className="slider-label">1°C</span>
+                Cliquez plusieurs fois pour faire monter la température.
+              </div>
+
+              <div
+                style={{
+                  marginTop: "12px",
+                  fontSize: "12px",
+                  color: socketConnected ? "#7cfc00" : "#ff6b6b",
+                }}
+              >
+                WebSocket {socketConnected ? "connecté" : "déconnecté"} — {iotEvent || "en attente de retour"}
               </div>
 
               {step1Done && (
-                <div className="step-success show">
-                  <div className="success-icon">❄️</div>
-                  <div className="success-title">
-                    SEUIL ATTEINT — VERROU OUVERT
-                  </div>
+                <div className="step-success show" style={{ marginTop: "20px" }}>
+                  <div className="success-icon">🔥</div>
+                  <div className="success-title">TEMPÉRATURE ATTEINTE</div>
                   <div className="success-text">
-                    La température a atteint le point critique. La chambre
-                    froide révèle son secret...
+                    Le backend a validé la mesure. Le mécanisme commence à céder.
                   </div>
                   <button
                     className="btn btn-success"
@@ -360,31 +430,89 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
           {/* ÉNIGME 2 */}
           {currentStep === 2 && (
             <div className="enigma active">
-              <div className="enigma-tag">// ÉNIGME 02 — CODE SECRET</div>
-              <div className="enigma-title">LE MOT DE PASSE OUBLIÉ</div>
+              <div className="enigma-tag">// ÉNIGME 02 — CAPTEUR LDR</div>
+              <div className="enigma-title">L'ŒIL DE LA NUIT</div>
               <div className="enigma-desc">
-                Un terminal verrouillé à 4 chiffres. Utilisez les notes trouvées
-                pour reconstituer le code d'accès.
+                Couvrez le capteur LDR avec votre main ou un objet, puis envoyez la mesure.
+              </div>
+
+              <div className="sensor-display">
+                <div className="panel sensor-card">
+                  <div className="panel-corner tl"></div>
+                  <div className="panel-corner tr"></div>
+                  <div className="panel-corner bl"></div>
+                  <div className="panel-corner br"></div>
+                  <span className="sensor-icon">🌙</span>
+                  <div>
+                    <span className="sensor-value">{lux}</span>
+                    <span className="sensor-unit">lux</span>
+                  </div>
+                  <div className="sensor-label">LUMINOSITÉ</div>
+                </div>
               </div>
 
               <div className="enigma-riddle">
-                <strong>Note 1:</strong> "Le premier chiffre est l'année de
-                création divisée par 500..."
+                <strong>« Je suis aveugle quand la lumière est trop forte.</strong>
+                Cache-moi dans l'obscurité totale et je t'ouvrirai le passage.
+              </div>
+
+              <button className="btn btn-orange" onClick={handleSendLight}>
+                SIMULER L'OBSCURITÉ & ENVOYER LA MESURE
+              </button>
+
+              <div
+                style={{
+                  fontFamily: '"Share Tech Mono", monospace',
+                  fontSize: "12px",
+                  color: "var(--text-dim)",
+                  marginTop: "10px",
+                }}
+              >
+                Chaque clic diminue la luminosité jusqu'à l'obscurité.
+              </div>
+
+              {step2Done && (
+                <div className="step-success show" style={{ marginTop: "20px" }}>
+                  <div className="success-icon">🌑</div>
+                  <div className="success-title">OBSCURITÉ TOTALE</div>
+                  <div className="success-text">
+                    Le backend a validé la mesure. Le passage est prêt.
+                  </div>
+                  <button
+                    className="btn btn-success"
+                    onClick={() => {
+                      setCurrentStep(3);
+                      addLog("Énigme 3 activée");
+                    }}
+                  >
+                    PASSER À L'ÉNIGME SUIVANTE →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ÉNIGME 3 */}
+          {currentStep === 3 && (
+            <div className="enigma active">
+              <div className="enigma-tag">// ÉNIGME 03 — CODE SECRET</div>
+              <div className="enigma-title">LE COFFRE-FORT DU CRYPTOGRAPHE</div>
+              <div className="enigma-desc">
+                Quatre indices sont gravés dans le métal. Le code est 4-3-2-7.
+              </div>
+
+              <div className="enigma-riddle">
+                <strong>1.</strong> Le premier chiffre est le double du troisième.
                 <br />
-                <strong>Note 2:</strong> "Le deuxième ? Regardez le nombre de
-                fenêtres dans cette pièce."
+                <strong>2.</strong> Le deuxième chiffre = le nombre de voyelles dans « MYSTÈRE ».
                 <br />
-                <strong>Note 3:</strong> "Troisième chiffre = premier +
-                deuxième."
+                <strong>3.</strong> Le troisième chiffre = le plus petit nombre premier.
                 <br />
-                <strong>Note 4:</strong> "Le dernier chiffre est le premier à
-                l'envers."
+                <strong>4.</strong> Le quatrième chiffre = la somme des deux premiers chiffres.
               </div>
 
               <div style={{ marginBottom: "20px" }}>
-                <label className="field-label">
-                  ENTREZ LE CODE — 4 CHIFFRES
-                </label>
+                <label className="field-label">ENTREZ LE CODE — 4 CHIFFRES</label>
                 <div className="code-digits">
                   {[0, 1, 2, 3].map((i) => (
                     <div
@@ -437,107 +565,10 @@ const Game: React.FC<GameProps> = ({ onNavigate }) => {
                 {codeHint}
               </div>
 
-              {step2Done && (
-                <div
-                  className="step-success show"
-                  style={{ marginTop: "20px" }}
-                >
-                  <div className="success-icon">🔓</div>
-                  <div className="success-title">
-                    CODE CORRECT — ACCÈS ACCORDÉ
-                  </div>
-                  <button
-                    className="btn btn-success"
-                    onClick={() => {
-                      setCurrentStep(3);
-                      addLog("Énigme 3 activée");
-                    }}
-                  >
-                    PASSER À L'ÉNIGME SUIVANTE →
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* ÉNIGME 3 */}
-          {currentStep === 3 && (
-            <div className="enigma active">
-              <div className="enigma-tag">// ÉNIGME 03 — CAPTEUR LUMINEUX</div>
-              <div className="enigma-title">LA LUMIÈRE DE LA VÉRITÉ</div>
-
-              <div className="enigma-riddle">
-                <strong>« Ni aveugle ni ébloui,</strong> la vérité se cache dans
-                la pénombre exacte. Cherchez le nombre de{" "}
-                <strong>planètes visibles à l'œil nu</strong>, multipliez par la{" "}
-                <strong>vitesse de la lumière en millions</strong>. »
-              </div>
-
-              <div className="light-big">
-                <span>{lux}</span>
-                <span style={{ fontSize: "24px", color: "var(--text-dim)" }}>
-                  {" "}
-                  lux
-                </span>
-              </div>
-
-              <div className="light-target">
-                VALEUR CIBLE:{" "}
-                <strong>{targetRevealed ? TARGET_LUX : "???"}</strong> lux
-                &nbsp;|&nbsp; TOLÉRANCE: ±15 lux
-              </div>
-
-              <div className="light-meter">
-                <div
-                  className="light-fill"
-                  style={{ width: `${lux / 10}%` }}
-                ></div>
-              </div>
-              <div className="light-value-row">
-                <span>0 lux</span>
-                <span>{(lux / 10).toFixed(1)}%</span>
-                <span>1000 lux</span>
-              </div>
-
-              <div className="light-slider-wrap">
-                <span
-                  className="slider-label"
-                  style={{ width: "50px", fontSize: "10px" }}
-                >
-                  OBTUREZ
-                </span>
-                <input
-                  type="range"
-                  min="0"
-                  max="1000"
-                  value={lux}
-                  onChange={(e) => handleLightChange(parseInt(e.target.value))}
-                />
-                <span
-                  className="slider-label"
-                  style={{ width: "50px", fontSize: "10px" }}
-                >
-                  ÉCLAIREZ
-                </span>
-              </div>
-
-              <button
-                className="btn btn-orange"
-                onClick={revealTarget}
-                disabled={targetRevealed}
-              >
-                {targetRevealed
-                  ? "✓ Valeur révélée"
-                  : "🔍 RÉVÉLER LA VALEUR CIBLE (−5 pts)"}
-              </button>
-
               {step3Done && (
-                <div
-                  className="step-success show"
-                  style={{ marginTop: "20px" }}
-                >
-                  <div className="success-icon">💡</div>
-                  <div className="success-title">CALIBRATION PARFAITE</div>
+                <div className="step-success show" style={{ marginTop: "20px" }}>
+                  <div className="success-icon">💥</div>
+                  <div className="success-title">CODE CORRECT — COFFRE-FORT OUVERT</div>
                   <button
                     className="btn btn-success"
                     onClick={() => setShowFinal(true)}

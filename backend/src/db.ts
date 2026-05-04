@@ -35,6 +35,7 @@ const saveDb = () => {
 
 type SensorPayload = {
   id: number;
+  gameId?: number;
   device: string;
   temperature: number;
   humidity: number;
@@ -120,6 +121,7 @@ export const completeGame = async (id: number, durationSeconds?: number | null):
 };
 
 export const addSensorPayload = async (payload: {
+  gameId?: number;
   device: string;
   temperature: number;
   humidity: number;

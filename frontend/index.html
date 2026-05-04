@@ -1,20 +1,40 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>CIPHER ROOM — Escape Game</title>
-    <!-- Chargement de vos polices d'écriture -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&family=Rajdhani:wght@300;400;600;700&display=swap"
-      rel="stylesheet"
-    />
-  </head>
-  <body>
-    <!-- C'est ici que React injecte l'application (le App.tsx) -->
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+<head>
+    <meta charset="UTF-8">
+    <title>Escape Game Master</title>
+    <!-- Importation de Socket.IO côté client -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+<body>
+    <h1>Interface Game Master (Escape Game IoT)</h1>
+    <h2>Étape actuelle : <span id="current-step" style="color: blue;">Chargement...</span></h2>
+    
+    <h3>Dernières activités (Temps réel)</h3>
+    <ul id="activity-log"></ul>
+
+    <script>
+        // Connexion au backend Socket.IO (Port 3001 d'après l'architecture)
+        const socket = io('http://localhost:3001');
+        const stepDisplay = document.getElementById('current-step');
+        const logList = document.getElementById('activity-log');
+
+        const stepNames = ["En attente de démarrage", "Étape 1 : Surchauffe (Temp > 35°C)", "Étape 2 : Code secret", "Partie Terminée - Victoire !"];
+
+        // Réception de l'état initial à la connexion de la page
+        socket.on('game_state_init', (data) => {
+            stepDisplay.innerText = stepNames[data.currentStep];
+        });
+
+        // Réaction en temps réel à chaque réception de payload depuis Node-RED
+        socket.on('iot_update', (data) => {
+            stepDisplay.innerText = stepNames[data.currentStep];
+
+            const li = document.createElement('li');
+            li.innerHTML = `<strong>Data reçue :</strong> ${JSON.stringify(data.payload)} <br> 
+                            <em>Étape validée ? ${data.stepSolved ? '✅ OUI' : '❌ NON'}</em>`;
+            logList.prepend(li); // Ajouter en haut de la liste
+        });
+    </script>
+</body>
 </html>

@@ -1,5 +1,7 @@
 import express, { Request, Response } from "express";
 import cors from "cors";
+import { createServer } from "node:http";
+import { Server as SocketIOServer } from "socket.io";
 import {
   addSensorPayload,
   completeGame,
@@ -13,6 +15,14 @@ import {
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const server = createServer(app);
+const io = new SocketIOServer(server, {
+  cors: { origin: "*" },
+});
+
+const TEMPERATURE_THRESHOLD = 30;
+const LIGHT_THRESHOLD = 50;
+const SECRET_CODE = "4327";
 
 // Middlewares
 app.use(cors());
@@ -113,7 +123,9 @@ app.patch("/api/game/:id", async (req: Request, res: Response) => {
 app.post("/api/game/:id/complete", async (req: Request, res: Response) => {
   try {
     const gameId = Number(req.params.id);
-    const durationSeconds = req.body.durationSeconds !== undefined ? Number(req.body.durationSeconds) : undefined;
+    const durationSeconds = typeof req.body.durationSeconds === "number"
+      ? req.body.durationSeconds
+      : undefined;
 
     const game = await completeGame(gameId, durationSeconds);
     if (!game) {
@@ -130,7 +142,6 @@ app.post("/api/game/:id/complete", async (req: Request, res: Response) => {
 // --- ROUTES IOT ---
 
 app.post("/api/iot/uplink", async (req: Request, res: Response) => {
-  console.log("test");
   try {
     const payload = req.body;
     const { device, temperature, humidity, luminosity, keypad } = payload ?? {};
@@ -149,8 +160,58 @@ app.post("/api/iot/uplink", async (req: Request, res: Response) => {
       });
     }
 
-    await addSensorPayload({ device, temperature, humidity, luminosity, keypad });
-    console.log("📡 Payload IoT reçu :", payload);
+    const unfinishedGames = await listUnfinishedGames();
+    const currentGame = unfinishedGames.length > 0 ? unfinishedGames[0] : null;
+    const gamePayload = currentGame ? { ...payload, gameId: currentGame.id } : payload;
+
+    const sensorRecord: {
+      gameId?: number;
+      device: string;
+      temperature: number;
+      humidity: number;
+      luminosity: number;
+      keypad: string;
+    } = {
+      device,
+      temperature,
+      humidity,
+      luminosity,
+      keypad,
+    };
+
+    if (currentGame?.id !== undefined) {
+      sensorRecord.gameId = currentGame.id;
+    }
+
+    await addSensorPayload(sensorRecord);
+
+    let stepSolved = false;
+    let nextStep = currentGame?.step ?? 1;
+    let isCompleted = false;
+
+    if (currentGame) {
+      if (currentGame.step === 1 && temperature >= TEMPERATURE_THRESHOLD) {
+        nextStep = 2;
+        stepSolved = true;
+        await updateGame(currentGame.id, { step: 2 });
+      } else if (currentGame.step === 2 && luminosity <= LIGHT_THRESHOLD) {
+        nextStep = 3;
+        stepSolved = true;
+        await updateGame(currentGame.id, { step: 3 });
+      } else if (currentGame.step === 3 && keypad === SECRET_CODE) {
+        stepSolved = true;
+        isCompleted = true;
+        await completeGame(currentGame.id);
+      }
+    }
+
+    io.emit("iot_update", {
+      payload: gamePayload,
+      currentStep: nextStep,
+      stepSolved,
+      gameId: currentGame?.id ?? null,
+      isCompleted,
+    });
 
     res.json({ success: true, message: "Données reçues." });
   } catch (error) {
@@ -169,6 +230,18 @@ app.get("/api/iot/payloads", async (_req: Request, res: Response) => {
   }
 });
 
-app.listen(PORT, () => {
+io.on("connection", async (socket) => {
+  console.log("Un client frontend est connecté :", socket.id);
+  const unfinishedGames = await listUnfinishedGames();
+  const currentGame = unfinishedGames.length > 0 ? unfinishedGames[0] : null;
+
+  socket.emit("game_state_init", {
+    currentStep: currentGame?.step ?? 1,
+    gameId: currentGame?.id ?? null,
+    isFinished: currentGame?.isFinished ?? false,
+  });
+});
+
+server.listen(PORT, () => {
   console.log(`🚀 Serveur MatMaxScape démarré sur http://localhost:${PORT}`);
 });
